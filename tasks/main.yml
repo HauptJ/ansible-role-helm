@@ -1,0 +1,74 @@
+---
+- name: check for installation of Helm
+  stat:
+    path: '{{ kubernetes_helm_install_dir }}/helm'
+  register: helm_bin
+
+- name: check for installation of Tiller
+  stat:
+    path: '{{ kubernetes_helm_install_dir }}/tiller'
+  register: tiller_bin
+
+- name: Install Helm and Tiller
+  block:
+    - name: Download Helm and Tiller
+      get_url:
+        url: '{{ kubernetes_helm_url }}'
+        dest: '/tmp/{{ kubernetes_helm_tgz }}'
+        checksum: '{{ kubernetes_helm_checksum }}'
+        mode: 0644
+
+    - name: Unarchive Helm and Tiller
+      unarchive:
+        copy: no
+        src: '/tmp/{{ kubernetes_helm_tgz }}'
+        dest: /tmp
+        creates: '/tmp/{{ kubernetes_helm_platform }}'
+
+    - name: Copy Helm and Tiller binaries
+      copy:
+        remote_src: yes
+        src: '/tmp/{{ kubernetes_helm_platform }}/{{ item }}'
+        dest: '{{ kubernetes_helm_install_dir }}/{{ item }}'
+        owner: root
+        group: root
+        mode: 0755
+      loop:
+        - helm
+        - tiller
+
+    - name: Copy RBAC policy for Helm
+      copy:
+        src: helm-rbac-config.yml
+        dest: /tmp/helm-rbac-config.yml
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: Apply helm RBAC policy
+      command: "kubectl apply -f /tmp/helm-rbac-config.yml --namespace kube-system"
+      tags:
+        - ci_test
+
+    - name: Initialize helm
+      command: "helm init --service-account tiller --tiller-namespace kube-system"
+      tags:
+        - ci_test
+
+    - name: Set up helm for {{ system_user }}
+      command: "helm init --client-only --tiller-namespace kube-system"
+      become_user: "{{ system_user }}"
+      tags:
+        - ci_test
+
+  when: helm_bin.stat.islnk is not defined or tiller_bin.stat.islnk is not defined
+
+  always:
+    - name: cleanup...
+      file:
+        path: '{{ item }}'
+        state: absent
+      loop:
+        - /tmp/{{ kubernetes_helm_tgz }}
+        - /tmp/{{ kubernetes_helm_platform }}
+        - /tmp/helm-rbac-config.yml

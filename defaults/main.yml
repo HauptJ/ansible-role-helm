@@ -1,0 +1,8 @@
+---
+system_user: root
+
+kubernetes_helm_version: '2.12.1'
+kubernetes_helm_platform: 'linux-amd64'
+
+kubernetes_helm_checksum: 'sha256:891004bec55431b39515e2cedc4f4a06e93782aa03a4904f2bd742b168160451'
+kubernetes_helm_install_dir: '/usr/bin'
